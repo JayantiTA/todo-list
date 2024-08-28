@@ -1,7 +1,13 @@
-import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  OneToMany,
+  CreateDateColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 import { Task } from '../task/task.entity';
 import { Comment } from '../comment/comment.entity';
-import { Notification } from '../notification/notification.entity';
 
 @Entity()
 export class User {
@@ -22,4 +28,10 @@ export class User {
 
   // @OneToMany(() => Notification, (notification) => notification.user)
   // notifications: Notification[];
+
+  @CreateDateColumn({ type: 'timestamp' })
+  createdAt: Date;
+
+  @UpdateDateColumn({ type: 'timestamp' })
+  updatedAt: Date;
 }

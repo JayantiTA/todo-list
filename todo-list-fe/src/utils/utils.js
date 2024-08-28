@@ -5,6 +5,5 @@ export const getServerUrl = () => {
 };
 
 export const getApiUrl = (path) => {
-    console.log(`${getServerUrl()}${path}`);
     return `${getServerUrl()}${path}`;
 };

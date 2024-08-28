@@ -4,20 +4,24 @@ import { TextField, Button, Container, Typography, Box } from '@mui/material';
 
 import { useAuthStore } from '../contexts/AuthContext';
 import { getApiUrl } from '../utils/utils';
+import { useNavigate } from 'react-router-dom';
 
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const { login } = useAuthStore();
+  const { setSession } = useAuthStore();
+  const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     const url = getApiUrl('/auth/login');
     try {
       const res = await axios.post(url, { email, password });
-      const accessToken = res.data.access_token;
-      const userData = res.data.user_data;
-      login(accessToken, userData);
+      const {accessToken} = res.data;
+      const userData = res.data.email;
+      setSession({ accessToken: accessToken, email: userData.email });
+
+      navigate('/todo');
     } catch {
       console.error('Login failed');
     }

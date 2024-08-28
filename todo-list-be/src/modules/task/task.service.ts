@@ -4,6 +4,9 @@ import { Repository } from 'typeorm';
 import { Task } from './task.entity';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UserService } from '../user/user.service';
+import { TaskDto } from './dto/task.dto';
+import { toTaskDto } from '../../utils/mapper';
+import { UserDto } from '../user/dto/user.dto';
 
 @Injectable()
 export class TaskService {
@@ -13,11 +16,10 @@ export class TaskService {
     private readonly userService: UserService,
   ) {}
 
-  async create(createTaskDto: CreateTaskDto): Promise<Task> {
+  async create(createTaskDto: CreateTaskDto): Promise<TaskDto> {
     const { assigneeEmail } = createTaskDto;
 
-    // Check if the assignee exists
-    let assignee;
+    let assignee: UserDto;
     if (assigneeEmail) {
       assignee = await this.userService.findByEmail(assigneeEmail);
       if (!assignee) {
@@ -30,26 +32,47 @@ export class TaskService {
       assigneeId: assignee?.id,
     });
 
-    return this.taskRepository.save(task);
+    const taskResult = await this.taskRepository.save(task);
+    const taskWithRelations = await this.taskRepository.findOne({
+      where: { id: taskResult.id },
+      relations: ['user', 'assignee'],
+    });
+    return toTaskDto(taskWithRelations);
   }
 
-  async findAll(): Promise<Task[]> {
-    return this.taskRepository.find({ relations: ['assignee'] });
+  async findAll(): Promise<TaskDto[]> {
+    const tasks = await this.taskRepository.find({
+      relations: ['user', 'assignee'],
+    });
+    return tasks.map((task) => toTaskDto(task));
   }
 
-  async findById(id: number): Promise<Task> {
+  async findById(id: number): Promise<TaskDto> {
     const task = await this.taskRepository.findOne({
       where: { id },
-      relations: ['assignee'],
+      relations: ['user', 'assignee'],
     });
     if (!task) {
       throw new NotFoundException('Task not found');
     }
-    return task;
+    return toTaskDto(task);
   }
 
-  async update(id: number, updateData: Partial<CreateTaskDto>): Promise<Task> {
-    const task = await this.findById(id);
+  async findByUserId(userId: number): Promise<TaskDto[]> {
+    const tasks = await this.taskRepository.find({
+      where: [{ userId: userId }, { assigneeId: userId }],
+    });
+    return tasks.map((task) => toTaskDto(task));
+  }
+
+  async update(
+    id: number,
+    updateData: Partial<CreateTaskDto>,
+  ): Promise<TaskDto> {
+    const task = await this.taskRepository.findOne({
+      where: { id },
+      relations: ['user', 'assignee'],
+    });
 
     if (updateData.assigneeEmail) {
       const assignee = await this.userService.findByEmail(
@@ -62,10 +85,19 @@ export class TaskService {
     }
 
     Object.assign(task, updateData);
-    return this.taskRepository.save(task);
+    const updatedTask = await this.taskRepository.save(task);
+    return toTaskDto(updatedTask);
   }
 
   async remove(id: number): Promise<void> {
-    await this.taskRepository.delete(id);
+    const task = await this.taskRepository.findOne({
+      where: { id },
+      relations: ['comments'],
+    });
+    if (task) {
+      await this.taskRepository.delete(id);
+    } else {
+      throw new NotFoundException(`Task with ID ${id} not found`);
+    }
   }
 }

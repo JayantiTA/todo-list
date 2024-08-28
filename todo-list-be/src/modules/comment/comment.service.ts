@@ -9,6 +9,8 @@ import { Comment } from './comment.entity';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { UserService } from '../user/user.service';
 import { TaskService } from '../task/task.service';
+import { CommentDto } from './dto/comment.dto';
+import { toCommentDto } from '../../utils/mapper';
 
 @Injectable()
 export class CommentService {
@@ -19,7 +21,7 @@ export class CommentService {
     private readonly taskService: TaskService,
   ) {}
 
-  async create(createCommentDto: CreateCommentDto): Promise<Comment> {
+  async create(createCommentDto: CreateCommentDto): Promise<CommentDto> {
     const { userId, taskId, content } = createCommentDto;
 
     const user = await this.userService.findById(userId);
@@ -40,14 +42,18 @@ export class CommentService {
       task,
     });
 
-    return this.commentRepository.save(comment);
+    const commentResult = await this.commentRepository.save(comment);
+    return toCommentDto(commentResult);
   }
 
-  async findAll(): Promise<Comment[]> {
-    return this.commentRepository.find({ relations: ['user', 'task'] });
+  async findAll(): Promise<CommentDto[]> {
+    const comments = await this.commentRepository.find({
+      relations: ['user', 'task'],
+    });
+    return comments.map((comment) => toCommentDto(comment));
   }
 
-  async findById(id: number): Promise<Comment> {
+  async findById(id: number): Promise<CommentDto> {
     const comment = await this.commentRepository.findOne({
       where: { id },
       relations: ['user', 'task'],
@@ -55,23 +61,31 @@ export class CommentService {
     if (!comment) {
       throw new NotFoundException('Comment not found');
     }
-    return comment;
+    return toCommentDto(comment);
   }
 
-  async update(id: number, userId: number, content: string): Promise<Comment> {
+  async update(
+    id: number,
+    editCommentDto: CreateCommentDto,
+  ): Promise<CommentDto> {
     const comment = await this.findById(id);
-    if (comment.userId !== userId) {
+    if (comment.user.id !== editCommentDto.userId) {
       throw new ForbiddenException('You can only update your own comments');
     }
-    comment.content = content;
-    return this.commentRepository.save(comment);
+    comment.content = editCommentDto.content;
+    const updatedComment = await this.commentRepository.save(comment);
+    return toCommentDto(updatedComment);
   }
 
   async remove(id: number, userId: number): Promise<void> {
     const comment = await this.findById(id);
-    if (comment.userId !== userId) {
+    if (comment.user.id !== userId) {
       throw new ForbiddenException('You can only delete your own comments');
     }
     await this.commentRepository.delete(id);
+  }
+
+  async removeByTaskId(taskId: number): Promise<void> {
+    await this.commentRepository.delete({ taskId });
   }
 }

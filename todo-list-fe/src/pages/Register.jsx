@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
 import { TextField, Button, Container, Typography, Box } from '@mui/material';
 import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
+
 import { getApiUrl } from '../utils/utils';
-import { redirect } from 'react-router-dom';
 
 const Register = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const navigate = useNavigate();
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -16,12 +18,12 @@ const Register = () => {
       return;
     }
     try {
-      const url = getApiUrl('/users');
+      const url = getApiUrl('/auth/register');
       axios.post(url, { email, password });
-      redirect('/login');
+      
+      navigate('/login');
     } catch {
       console.error('Registration failed');
-      return;
     }
   };
 

@@ -1,31 +1,71 @@
 import React, { useState } from 'react';
-import { Typography, Box, Button, IconButton, MenuItem, TextField } from '@mui/material';
+import PropTypes from 'prop-types';
+import { Typography, Box, Button, IconButton, TextField } from '@mui/material';
 import { useTaskStore } from '../../contexts/TaskContext';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import TaskFormModal from './TaskFormModal'; // Ensure TaskFormModal is imported
+import { getApiUrl } from '../../utils/utils';
+import { useAuthStore } from '../../contexts/AuthContext';
+import axios from 'axios';
 
-const TaskItem = ({ task }) => {
+const TaskItem = ({ task, loadTask }) => {
   const [isEditing, setIsEditing] = useState(false);
-  const { updateTask, deleteTask, assignTask, addComment, users } = useTaskStore();
+  const { updateTask, deleteTask } = useTaskStore();
   const [comment, setComment] = useState('');
+  const session = useAuthStore.getState();
+  const { accessToken } = session?.session || {};
 
-  const handleEdit = (updatedTask) => {
-    updateTask(updatedTask);
+  const handleEdit = async () => {
+    const url = getApiUrl(`/tasks/${task.id}`);
+    try {
+      const res = await axios.put(url, task, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`
+        }
+      });
+      await loadTask();
+      updateTask(res.data);
+    } catch (error) {
+      console.error('Error updating task:', error);
+    }
     setIsEditing(false);
   };
 
-  const handleDelete = () => {
-    deleteTask(task.id);
+  const handleDelete = async () => {
+    const url = getApiUrl(`/tasks/${task.id}`);
+    const commentUrl = getApiUrl(`/comments/task/${task.id}`);
+    try {
+      await axios.delete(commentUrl, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`
+        }
+      });
+      await axios.delete(url, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`
+        }
+      });
+      await loadTask();
+      deleteTask(task.id);
+    } catch (error) {
+      console.error('Error deleting task:', error);
+    }
   };
 
-  const handleAssign = (e) => {
-    assignTask(task.id, e.target.value);
-  };
-
-  const handleComment = () => {
-    addComment(task.id, comment);
-    setComment('');
+  const handleComment = async () => {
+    const url = getApiUrl('/comments')
+    try {
+      await axios.post(url, { taskId: task.id, content: comment }, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`
+        }
+      });
+      await loadTask();
+      setComment('');
+    } catch (error) {
+      console.error('Error adding comment:', error);
+    }
   };
 
   const handleOpenEditModal = () => {
@@ -42,21 +82,11 @@ const TaskItem = ({ task }) => {
       <Typography variant="body1">{task.description}</Typography>
       <Typography variant="caption">Status: {task.status}</Typography>
       <br />
-      <Typography variant="caption">Due: {task.dueDate}</Typography>
-      <TextField
-        label="Assign to"
-        select
-        value={task.assignedTo || ''}
-        onChange={handleAssign}
-        fullWidth
-        sx={{ mt: 2 }}
-      >
-        {users.map((user) => (
-          <MenuItem key={user} value={user}>
-            {user}
-          </MenuItem>
-        ))}
-      </TextField>
+      <Typography variant="caption">Due: {new Date(task.dueDate).toISOString().split('T')[0]}</Typography>
+      <br />
+      <Typography variant="caption">Assigned to: {task.assignee?.email}</Typography>
+      <br />
+      <Typography variant="caption">Created by: {task.user.email}</Typography>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 2 }}>
         <Button variant="contained" color="primary" onClick={handleOpenEditModal}>
           <EditIcon />
@@ -80,13 +110,24 @@ const TaskItem = ({ task }) => {
         </Button>
       </Box>
       {task.comments && (
-        <Box sx={{ mt: 2 }}>
-          {task.comments.map((c, index) => (
-            <Typography key={index} variant="body2">
-              {c}
+        <>
+          {task.comments.length > 0 && (
+            <Typography variant="h6" sx={{ mt: 2 }}>
+              Comments
             </Typography>
-          ))}
-        </Box>
+          )}
+          <Box sx={{ mt: 2 }}>
+            {task.comments.map((comment) => (
+              <Typography key={comment.id} variant="body2">
+                {comment.createdAt} - {comment.user.email}
+                <br />
+                <strong>
+                  {comment.content}
+                </strong>
+              </Typography>
+            ))}
+          </Box>
+        </>
       )}
       <TaskFormModal
         open={isEditing}
@@ -96,6 +137,11 @@ const TaskItem = ({ task }) => {
       />
     </Box>
   );
+};
+
+TaskItem.propTypes = {
+  task: PropTypes.object.isRequired,
+  loadTask: PropTypes.func.isRequired,
 };
 
 export default TaskItem;
